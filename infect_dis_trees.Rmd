@@ -1,0 +1,77 @@
+---
+title: "Network Science Final project"
+author: "Ravi Brenner"
+date: "2025-04-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+```{r}
+library(igraph)
+library(tidyverse)
+```
+
+
+Read in the data, filtering to trees with size >= 20 and at least 2 generations of spread
+```{r}
+trees <- readRDS("data_tibble_trees.RDS") |>
+  janitor::clean_names() |>
+  filter(size >= 20,
+         generations >= 2) |>
+  mutate(tree = map(tree,\(x) igraph::upgrade_graph(x)),
+         full_title = str_c(disease,", ",str_replace_na(sublocation,""), " ",country,", ", year))
+```
+
+```{r}
+trees$avg_out_degree <- NA
+trees$avg_non_terminal_out_degree <- NA
+trees$gen1 <- NA
+trees$ss_threshold <- NA
+trees$ss_count <- NA
+
+for (i in 1:nrow(trees)){
+  current_tree <- trees$tree[[i]]
+  
+  # average out degree of all nodes
+  trees$avg_out_degree[i] <- mean(degree(current_tree,mode = "out"))
+  
+  # average out degree of non-terminal nodes
+  non_terminal_nodes <- V(current_tree)[degree(current_tree, mode = "out") > 0]
+  trees$avg_non_terminal_out_degree[i] <- mean(degree(current_tree, v=non_terminal_nodes,mode = "out"))
+  
+  # first gen size
+  first_node <- V(current_tree)[degree(current_tree, mode = "in") == 0]
+  first_gen_nodes <- V(current_tree)[distances(current_tree,v = first_node) == 1]
+  trees$gen1[i] <- length(first_gen_nodes)
+  
+  # superspreaders 
+  # "Lloyd-Smith and colleagues [3] quantitatively defined superspreaders as cases that cause more secondary infections than the 99th percentile of a Poisson(R0) distribution, where R0 is the basic reproductive number, or average number of secondary infections per case."
+  trees$ss_threshold[i] <- qpois(0.99,lambda = trees$avg_out_degree[i])
+  ss_nodes <- V(current_tree)[degree(current_tree, mode = "out") > trees$ss_threshold[i]]
+  trees$ss_count[i] <- length(ss_nodes)
+  
+  
+  # Try to visualize the trees?
+  # plot(trees$tree[[i]],layout = layout_with_kk,
+  #      main = trees$full_title[[i]],
+  #      vertex.size = sqrt(igraph::degree(trees$tree[[i]])),
+  #      edge.arrow.size=0.4,
+  #      vertex.label.cex = 0.5)
+}
+```
+
+plot degree/R0 by disease
+```{r}
+trees |> 
+  pivot_longer(cols = c(avg_out_degree,avg_non_terminal_out_degree),
+               names_to = "degree_type",
+               values_to = "avg_degree") |>
+  ggplot(aes(y = disease, x = avg_degree, color = degree_type)) + 
+  geom_boxplot()
+```
+
