@@ -14,6 +14,8 @@ knitr::opts_chunk$set(echo = TRUE,
 ```{r}
 library(igraph)
 library(tidyverse)
+library(patchwork)
+library(latex2exp)
 ```
 
 
@@ -27,12 +29,20 @@ trees <- readRDS("data_tibble_trees.RDS") |>
          full_title = str_c(disease,", ",str_replace_na(sublocation,""), " ",country,", ", year))
 ```
 
+To add in here: random and targeted breakdown of each network.
+
+Maybe? Calculate dispersion like they do in the paper? might be more complicated than it's worth
 ```{r}
 trees$avg_out_degree <- NA
 trees$avg_non_terminal_out_degree <- NA
 trees$gen1 <- NA
+trees$avg_gen01_out_degree <- NA
 trees$ss_threshold <- NA
 trees$ss_count <- NA
+trees$ss_threshold_non_term <- NA
+trees$ss_non_term_count <- NA
+trees$ss_threshold_gen01 <- NA
+trees$ss_gen01_count <- NA
 
 for (i in 1:nrow(trees)){
   current_tree <- trees$tree[[i]]
@@ -48,12 +58,23 @@ for (i in 1:nrow(trees)){
   first_node <- V(current_tree)[degree(current_tree, mode = "in") == 0]
   first_gen_nodes <- V(current_tree)[distances(current_tree,v = first_node) == 1]
   trees$gen1[i] <- length(first_gen_nodes)
+  trees$avg_gen01_out_degree[i] <- mean(degree(current_tree, v = c(first_node,first_gen_nodes), mode = "out"))
   
   # superspreaders 
   # "Lloyd-Smith and colleagues [3] quantitatively defined superspreaders as cases that cause more secondary infections than the 99th percentile of a Poisson(R0) distribution, where R0 is the basic reproductive number, or average number of secondary infections per case."
   trees$ss_threshold[i] <- qpois(0.99,lambda = trees$avg_out_degree[i])
   ss_nodes <- V(current_tree)[degree(current_tree, mode = "out") > trees$ss_threshold[i]]
   trees$ss_count[i] <- length(ss_nodes)
+  
+  # superspreaders, calculating threshold excluding terminal nodes
+  trees$ss_threshold_non_term[i] <- qpois(0.99, lambda = trees$avg_non_terminal_out_degree[i])
+  ss_nodes <- V(current_tree)[degree(current_tree, mode = "out") > trees$ss_threshold_non_term[i]]
+  trees$ss_non_term_count[i] <- length(ss_nodes)
+  
+  # superspreaders, calculating threshold using gen 0 and 1 only
+  trees$ss_threshold_gen01[i] <- qpois(0.99, lambda = trees$avg_gen01_out_degree[i])
+  ss_nodes <- V(current_tree)[degree(current_tree, mode = "out") > trees$ss_threshold_gen01[i]]
+  trees$ss_gen01_count[i] <- length(ss_nodes)
   
   
   # Try to visualize the trees?
@@ -65,13 +86,156 @@ for (i in 1:nrow(trees)){
 }
 ```
 
-plot degree/R0 by disease
+Number of trees of each disease 
+
+Note: they limit most future analyses to diseases with at least 3 trees. We could do the same?
+
+Those diseases are: Ebola, COVID-19, MERS, norovirus, SARS, and Measles
+```{r}
+p.tree_count <- trees |>
+  count(disease) |>
+  ggplot(aes(y = reorder(disease,n), x = n)) + 
+  geom_col(fill = "lightblue") + 
+  labs(x = "Number of trees",
+       y = "Disease")
+p.tree_count
+```
+
+Size of trees
+```{r}
+p.tree_size <- trees |>
+  mutate(.by = disease, n = n()) |>
+  ggplot(aes(x = size, y = reorder(disease,n))) +
+  geom_point() + 
+  labs(x = "Tree size",
+       y = "Disease")
+p.tree_size
+```
+
+```{r}
+p.tree_count + p.tree_size + plot_layout(axes = "collect")
+```
+
+Look at the biggest trees, so that we can visualize a few of them
 ```{r}
 trees |> 
-  pivot_longer(cols = c(avg_out_degree,avg_non_terminal_out_degree),
+  arrange(-size) |>
+  select(id,size) |>
+  head(10)
+```
+
+Plotting an individual tree, can use this in the slides to explain the terminal vs. 1st gen concept, how that impacts the average out degree / R0 calculation
+```{r}
+# only need to change this to get a new set of plots
+tree_id <- "usa.2020.covid.6.00"
+
+plot_tree <- trees[which(trees$id==tree_id), ]$tree[[1]]  
+
+tree_title <- trees |>
+  filter(id == tree_id) |>
+  select(full_title) |>
+  pull()
+
+# Mark all nodes in black
+V(plot_tree)$color <- "black"
+
+# Mark first node in red
+V(plot_tree)[degree(plot_tree, mode = "in") == 0]$node_type <- "first"
+V(plot_tree)[degree(plot_tree, mode = "in") == 0]$color <- "red"
+
+# Mark gen 1 nodes in yellow
+first_node <- V(plot_tree)[degree(plot_tree, mode = "in") == 0]
+V(plot_tree)[distances(plot_tree, v=first_node)==1]$node_type <- "gen1"
+V(plot_tree)[distances(plot_tree, v=first_node)==1]$color <- "yellow"
+
+# Mark terminal nodes in blue
+V(plot_tree)[degree(plot_tree, mode = "out") == 0]$node_type <- "terminal"
+V(plot_tree)[degree(plot_tree, mode = "out") == 0]$color <- "blue"
+
+# Mark nodes that are terminal and first gen in green
+V(plot_tree)[degree(plot_tree, mode = "out") == 0 & distances(plot_tree, v=first_node)==1]$node_type <- "terminal and gen1"
+V(plot_tree)[degree(plot_tree, mode = "out") == 0 & distances(plot_tree, v=first_node)==1]$color <- "lightgreen"
+par(mfrow=c(1,1))
+
+plot(plot_tree, layout = layout_with_kk,
+     vertex.color = V(plot_tree)$color, 
+     vertex.size=5, vertex.label="", 
+     edge.arrow.size=.15, edge.width=.2,edge.color="black",
+     main = tree_title)
+
+legend("bottomright",
+       legend=c("Index node", "1st gen","Terminal node","Terminal 1st gen", "All other nodes"),  
+       fill = c("red","yellow","blue","lightgreen","black") ,
+       cex = 0.7)
+
+# could show this, just to demonstrate that these are trees
+plot(plot_tree, layout = layout_as_tree(plot_tree,circular = TRUE),
+     vertex.color = V(plot_tree)$color, vertex.size=5, vertex.label="", 
+     edge.arrow.size=.15, edge.width=.2,edge.color="black",
+     main = tree_title)
+
+legend("bottomright",
+       legend=c("Index node", "1st gen","Terminal node","Terminal 1st gen", "All other nodes"),  
+       fill = c("red","yellow","blue","lightgreen","black") ,
+       cex = 0.7)
+
+# Can maybe look at which nodes have high degree this way?
+degree_table <- tibble(nodes = as.numeric(V(plot_tree)),
+                       out_degree = degree(plot_tree, mode = "out"),
+                       node_type = V(plot_tree)$node_type)
+
+ggplot(degree_table) +
+  geom_point(aes(x = nodes, y = out_degree, color = node_type))
+```
+
+
+plot degree/R0 by disease, and show how it changes depending on which nodes you include.
+
+```{r}
+trees |> 
+  pivot_longer(cols = c(avg_out_degree,avg_non_terminal_out_degree, avg_gen01_out_degree),
                names_to = "degree_type",
                values_to = "avg_degree") |>
   ggplot(aes(y = disease, x = avg_degree, color = degree_type)) + 
-  geom_boxplot()
+  geom_boxplot()  +
+  scale_color_discrete(name = "Nodes included",
+                     labels = c("Gen 0 and 1 nodes","Non-terminal nodes","All nodes")) + 
+  labs(x = TeX("$R_{0}$ / Average out degree"),
+       y = "Disease") 
 ```
+
+Plot superspreader cutoffs by disease
+```{r}
+trees |> 
+  pivot_longer(cols = c(ss_threshold,ss_threshold_non_term, ss_threshold_gen01),
+               names_to = "ss_threshold",
+               values_to = "avg_degree") |>
+  ggplot(aes(y = disease, x = avg_degree, color = ss_threshold)) + 
+  geom_boxplot()  +
+  scale_color_discrete(name = "Nodes included",
+                     labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes")) +
+  labs(x = "Super spreader threshold",
+       y = "Disease") 
+```
+
+Plot Percent of superspreaders  by disease
+```{r}
+trees |> 
+  mutate(ss_count = ss_count / size,
+         ss_non_term_count = ss_non_term_count / size,
+         ss_gen01_count = ss_gen01_count / size) |>
+  pivot_longer(cols = c(ss_count,ss_non_term_count, ss_gen01_count),
+               names_to = "node_type",
+               values_to = "ss_count") |>
+  ggplot(aes(y = disease, x = ss_count, color = node_type)) + 
+  geom_boxplot()  +
+  scale_color_discrete(name = "Nodes included",
+                     labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes")) +
+  labs(x = "Percent of superspreaders",
+       y = "Disease") 
+```
+
+
+
+
 
