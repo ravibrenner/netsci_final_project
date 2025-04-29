@@ -16,6 +16,7 @@ library(igraph)
 library(tidyverse)
 library(patchwork)
 library(latex2exp)
+theme_set(theme_minimal())
 ```
 
 
@@ -235,6 +236,38 @@ trees |>
        y = "Disease") 
 ```
 
+Plot R0 vs percent of superspreaders
+
+Sort of interesting that the percent of superspreaders is highest for lower R0 values. Makes sense since the threshold increases with increasing R0 values, and a higher threshold becomes harder to achieve. Heuristically, if you have a high R0 disease like measles (r0 ~= 12), then you need to spread to a LOT of people to be considered a super spreader.
+```{r}
+trees |>
+   mutate(ss_count = ss_count / size,
+         ss_non_term_count = ss_non_term_count / size,
+         ss_gen01_count = ss_gen01_count / size) |>
+  ggplot(aes(x = avg_non_terminal_out_degree, y = ss_non_term_count,
+             color = disease, label = disease)) + 
+  geom_point() + 
+  geom_text(size = 3, check_overlap = TRUE, hjust = -0.1, vjust = -0.5) + 
+  scale_x_continuous(limits = c(1,13),
+                     n.breaks = 13) +
+  labs(x = "R0, non-terminal nodes",
+       y = "Percent of superspreaders") 
+  
+
+trees |>
+   mutate(ss_count = ss_count / size,
+         ss_non_term_count = ss_non_term_count / size,
+         ss_gen01_count = ss_gen01_count / size) |>
+  ggplot(aes(x = avg_gen01_out_degree, y = ss_gen01_count,
+             color = disease, label = disease)) + 
+  geom_point() + 
+  geom_text(size = 3, check_overlap = TRUE, hjust = -0.1, vjust = -0.5) + 
+  scale_x_continuous(limits = c(1,10),
+                     n.breaks = 10) + 
+  theme(legend.position= "none") +
+  labs(x = "R0, Gen 0 and 1 nodes",
+       y = "Percent of superspreaders") 
+```
 
 
 
