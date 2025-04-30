@@ -98,7 +98,8 @@ p.tree_count <- trees |>
   ggplot(aes(y = reorder(disease,n), x = n)) + 
   geom_col(fill = "lightblue") + 
   labs(x = "Number of trees",
-       y = "Disease")
+       y = "Disease") + 
+  theme(text = element_text(size = 15))
 p.tree_count
 ```
 
@@ -109,12 +110,16 @@ p.tree_size <- trees |>
   ggplot(aes(x = size, y = reorder(disease,n))) +
   geom_point() + 
   labs(x = "Tree size",
-       y = "Disease")
+       y = "Disease") + 
+  theme(text = element_text(size = 15))
 p.tree_size
 ```
 
 ```{r}
-p.tree_count + p.tree_size + plot_layout(axes = "collect")
+p.tree_count + p.tree_size + 
+  plot_layout(axes = "collect") 
+
+ggsave("number_size_plot.png",width = 10, height = 6, bg="white")
 ```
 
 Look at the biggest trees, so that we can visualize a few of them
@@ -169,13 +174,13 @@ legend("bottomright",
        fill = c("red","yellow","blue","lightgreen","black") ,
        cex = 0.7)
 
-# could show this, just to demonstrate that these are trees
+# another version in a circle
 plot(plot_tree, layout = layout_as_tree(plot_tree,circular = TRUE),
      vertex.color = V(plot_tree)$color, vertex.size=5, vertex.label="", 
      edge.arrow.size=.15, edge.width=.2,edge.color="black",
      main = tree_title)
 
-legend("bottomright",
+legend("topright",
        legend=c("Index node", "1st gen","Terminal node","Terminal 1st gen", "All other nodes"),  
        fill = c("red","yellow","blue","lightgreen","black") ,
        cex = 0.7)
@@ -202,12 +207,15 @@ trees |>
   scale_color_discrete(name = "Nodes included",
                      labels = c("Gen 0 and 1 nodes","Non-terminal nodes","All nodes")) + 
   labs(x = TeX("$R_{0}$ / Average out degree"),
-       y = "Disease") 
+       y = "Disease") +
+  theme(text = element_text(size = 15))
+
+ggsave("r0_by_disease.png", width = 7, heigh = 6, bg = "white")
 ```
 
 Plot superspreader cutoffs by disease
 ```{r}
-trees |> 
+p.ss_threshold <- trees |> 
   pivot_longer(cols = c(ss_threshold,ss_threshold_non_term, ss_threshold_gen01),
                names_to = "ss_threshold",
                values_to = "avg_degree") |>
@@ -215,13 +223,16 @@ trees |>
   geom_boxplot()  +
   scale_color_discrete(name = "Nodes included",
                      labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes")) +
-  labs(x = "Super spreader threshold",
-       y = "Disease") 
+  labs(x = "Superspreader threshold",
+       y = "Disease") +
+  theme(legend.position = "bottom")
+
+p.ss_threshold
 ```
 
 Plot Percent of superspreaders  by disease
 ```{r}
-trees |> 
+p.pct_ss <- trees |> 
   mutate(ss_count = ss_count / size,
          ss_non_term_count = ss_non_term_count / size,
          ss_gen01_count = ss_gen01_count / size) |>
@@ -233,14 +244,23 @@ trees |>
   scale_color_discrete(name = "Nodes included",
                      labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes")) +
   labs(x = "Percent of superspreaders",
-       y = "Disease") 
+       y = "Disease") +
+  theme(legend.position = "bottom")
+p.pct_ss
+
+p.ss_threshold + p.pct_ss + 
+  plot_layout(axes = "collect", guides = "collect") &
+  theme(legend.position = "bottom",
+        text = element_text(size = 15))
+
+ggsave("pct_ss_by_disease.png",width = 12, height = 6, bg="white")
 ```
 
 Plot R0 vs percent of superspreaders
 
 Sort of interesting that the percent of superspreaders is highest for lower R0 values. Makes sense since the threshold increases with increasing R0 values, and a higher threshold becomes harder to achieve. Heuristically, if you have a high R0 disease like measles (r0 ~= 12), then you need to spread to a LOT of people to be considered a super spreader.
 ```{r}
-trees |>
+p.r0_ss_nonterm <- trees |>
    mutate(ss_count = ss_count / size,
          ss_non_term_count = ss_non_term_count / size,
          ss_gen01_count = ss_gen01_count / size) |>
@@ -250,11 +270,16 @@ trees |>
   geom_text(size = 3, check_overlap = TRUE, hjust = -0.1, vjust = -0.5) + 
   scale_x_continuous(limits = c(1,13),
                      n.breaks = 13) +
+  theme(legend.position= "none") +
   labs(x = "R0, non-terminal nodes",
        y = "Percent of superspreaders") 
-  
 
-trees |>
+p.r0_ss_nonterm
+```
+
+
+```{r}
+p.r0_ss_gen01 <- trees |>
    mutate(ss_count = ss_count / size,
          ss_non_term_count = ss_non_term_count / size,
          ss_gen01_count = ss_gen01_count / size) |>
@@ -267,6 +292,17 @@ trees |>
   theme(legend.position= "none") +
   labs(x = "R0, Gen 0 and 1 nodes",
        y = "Percent of superspreaders") 
+p.r0_ss_gen01
+```
+
+
+```{r}
+p.r0_ss_nonterm + p.r0_ss_gen01 + 
+  plot_layout(axes = "collect", guides = "collect") &
+  theme(legend.position = "none",
+        text = element_text(size = 15))
+
+ggsave("r0_ss_scatter.png",width = 12, height = 6, bg="white")
 ```
 
 
