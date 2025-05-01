@@ -206,11 +206,15 @@ trees |>
   geom_boxplot()  +
   scale_color_discrete(name = "Nodes included",
                      labels = c("Gen 0 and 1 nodes","Non-terminal nodes","All nodes")) + 
+  scale_x_continuous(n.breaks = 12,
+                     minor_breaks = NULL) +
   labs(x = TeX("$R_{0}$ / Average out degree"),
-       y = "Disease") +
-  theme(text = element_text(size = 15))
+       y = "") +
+  theme(text = element_text(size = 15),
+        legend.position = "bottom",
+        legend.text = element_text(size = 12, hjust = -10))
 
-ggsave("r0_by_disease.png", width = 7, heigh = 6, bg = "white")
+ggsave("r0_by_disease.png", width = 8, heigh = 6, bg = "white")
 ```
 
 Plot superspreader cutoffs by disease
@@ -221,8 +225,9 @@ p.ss_threshold <- trees |>
                values_to = "avg_degree") |>
   ggplot(aes(y = disease, x = avg_degree, color = ss_threshold)) + 
   geom_boxplot()  +
-  scale_color_discrete(name = "Nodes included",
-                     labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes")) +
+  scale_color_manual(name = "Nodes included",
+                     labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes"),
+                     values = c("#619CFF","#F8766D","#00BA38")) +
   labs(x = "Superspreader threshold",
        y = "Disease") +
   theme(legend.position = "bottom")
@@ -241,8 +246,9 @@ p.pct_ss <- trees |>
                values_to = "ss_count") |>
   ggplot(aes(y = disease, x = ss_count, color = node_type)) + 
   geom_boxplot()  +
-  scale_color_discrete(name = "Nodes included",
-                     labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes")) +
+  scale_color_manual(name = "Nodes included",
+                     labels = c("All nodes","Gen 0 and 1 nodes","Non-terminal nodes"),
+                     values = c("#619CFF","#F8766D","#00BA38")) +
   labs(x = "Percent of superspreaders",
        y = "Disease") +
   theme(legend.position = "bottom")
